@@ -11,7 +11,7 @@ import XCTest
 
 class UtilitiesTests: XCTestCase {
     func testCreatingDateStrings() {
-        let d = NSDate(timeIntervalSinceReferenceDate: 452457730)
-        XCTAssertEqual(d.HTTPFormattedDateString(timeZone: NSTimeZone(abbreviation: "GMT")!), "Mon, 04 May 2015 18:42:10 GMT")
+        let d = Date(timeIntervalSinceReferenceDate: 452457730)
+        XCTAssertEqual(d.HTTPFormattedDateString(timeZone: TimeZone(abbreviation: "GMT")!), "Mon, 04 May 2015 18:42:10 GMT")
     }
 }

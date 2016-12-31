@@ -11,8 +11,8 @@ import SocketHelpers
 
 
 
-public enum SocketError : ErrorType {
-    case NoPortAvailable
+public enum SocketError : Error {
+    case noPortAvailable
 }
 
 
@@ -20,37 +20,37 @@ public enum SocketError : ErrorType {
 
 public final class SocketServer {
     public struct Channel {
-        public let channel: dispatch_io_t
+        public let channel: DispatchIO
         public let address: SocketAddress
     }
     
     public let port: UInt16
     
     /// The accept handler will be called with a suspended dispatch I/O channel and the client's SocketAddress.
-    public convenience init(acceptHandler: (Channel) -> ()) throws {
-        let serverSocket = try TCPSocket(domain: .Inet)
+    public convenience init(acceptHandler: @escaping (Channel) -> ()) throws {
+        let serverSocket = try TCPSocket(domain: .inet)
         let port = try serverSocket.bindToAnyPort()
         try serverSocket.setStatusFlags(.O_NONBLOCK)
         try self.init(serverSocket: serverSocket, port: port, acceptHandler: acceptHandler)
     }
     
     let serverSocket: TCPSocket
-    let acceptSource: dispatch_source_t
+    let acceptSource: DispatchSource
     
-    private init(serverSocket ss: TCPSocket, port p: UInt16, acceptHandler: (Channel) -> ()) throws {
+    fileprivate init(serverSocket ss: TCPSocket, port p: UInt16, acceptHandler: @escaping (Channel) -> ()) throws {
         serverSocket = ss
         port = p
         acceptSource = SocketServer.createDispatchSourceWithSocket(ss, port: p, acceptHandler: acceptHandler)
-        dispatch_resume(acceptSource);
+        acceptSource.resume();
         try serverSocket.listen()
     }
     
-    private static func createDispatchSourceWithSocket(socket: TCPSocket, port: UInt16, acceptHandler: (Channel) -> ()) -> dispatch_source_t {
+    fileprivate static func createDispatchSourceWithSocket(_ socket: TCPSocket, port: UInt16, acceptHandler: @escaping (Channel) -> ()) -> DispatchSource {
         let queueName = "server on port \(port)"
-        let queue = dispatch_queue_create(queueName, DISPATCH_QUEUE_CONCURRENT);
+        let queue = DispatchQueue(label: queueName, attributes: DispatchQueue.Attributes.concurrent);
         let source = socket.createDispatchReadSourceWithQueue(queue)
         
-        dispatch_source_set_event_handler(source) {
+        source.setEventHandler {
             source.forEachPendingConnection {
                 do {
                     let clientSocket = try socket.accept()
@@ -66,7 +66,7 @@ public final class SocketServer {
     }
     
     deinit {
-        dispatch_source_cancel(acceptSource)
+        acceptSource.cancel()
         ignoreAndLogErrors {
             try serverSocket.close()
         }
@@ -74,9 +74,9 @@ public final class SocketServer {
 }
 
 
-private extension dispatch_source_t {
-    func forEachPendingConnection(b: () -> ()) {
-        let pendingConnectionCount = dispatch_source_get_data(self)
+private extension DispatchSource {
+    func forEachPendingConnection(_ b: () -> ()) {
+        let pendingConnectionCount: UInt = self.data
         for _ in 0..<pendingConnectionCount {
             b()
         }
@@ -90,10 +90,10 @@ private extension TCPSocket {
             do {
                 try bindToPort(port)
                 return port
-            } catch let e as Error where e.backing == .EADDRINUSE {
+            } catch let e as DarwinError where e.backing == POSIXError(.EADDRINUSE) {
                 continue
             }
         }
-        throw SocketError.NoPortAvailable
+        throw SocketError.noPortAvailable
     }
 }

@@ -34,4 +34,5 @@ GCC_PREPROCESSOR_DEFINITIONS = DEBUG=1 $(inherited)
 
 // Swift Compiler - Code Generation
 //
+SWIFT_VERSION = 3.0;
 SWIFT_OPTIMIZATION_LEVEL = -Onone

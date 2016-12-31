@@ -10,7 +10,7 @@ import Foundation
 
 
 
-struct Error : ErrorType {
+struct DarwinError: Error {
     let operation: String
     let backing: POSIXError
     let file: String
@@ -19,19 +19,20 @@ struct Error : ErrorType {
     var _domain: String { return backing._domain }
 }
 
-extension Error {
-    init(operation: String, errno: CInt, file: String = __FILE__, line: UInt = __LINE__) {
+extension DarwinError {
+    init(operation: String, errno: CInt, file: String = #file, line: UInt = #line) {
         self.operation = operation
-        self.backing = POSIXError(rawValue: errno)!
+        let nsError = NSError(domain: POSIXError.errorDomain, code: Int(errno), userInfo: nil)
+        self.backing = POSIXError(_nsError: nsError)
         self.file = file
         self.line = line
     }
 }
 
 
-extension Error : CustomStringConvertible {
+extension DarwinError : CustomStringConvertible {
     var description: String {
-        let s = String.fromCString(strerror(errno))
+        let s = String(cString: strerror(errno))
         return "\(operation) failed: \(s) (\(_code))"
     }
 }
@@ -39,24 +40,24 @@ extension Error : CustomStringConvertible {
 
 /// The 1st closure must return `true` is the result is an error.
 /// The 2nd closure is the operation to be performed.
-func attempt(name: String, file: String = __FILE__, line: UInt = __LINE__, @noescape valid: (CInt) -> Bool, @autoclosure _ b: () -> CInt) throws -> CInt {
+func attempt(_ name: String, file: String = #file, line: UInt = #line, valid: (CInt) -> Bool, _ b: @autoclosure () -> CInt) throws -> CInt {
     let r = b()
     guard valid(r) else {
-        throw Error(operation: name, errno: r, file: file, line: line)
+        throw DarwinError(operation: name, errno: r, file: file, line: line)
     }
     return r
 }
 
-func isNotNegative1(r: CInt) -> Bool {
+func isNotNegative1(_ r: CInt) -> Bool {
     return r != -1
 }
-func is0(r: CInt) -> Bool {
+func is0(_ r: CInt) -> Bool {
     return r != -1
 }
 
 
 ///
-func ignoreAndLogErrors(@noescape b: () throws -> ()) {
+func ignoreAndLogErrors(_ b: () throws -> ()) {
     do {
         try b()
     } catch let e {

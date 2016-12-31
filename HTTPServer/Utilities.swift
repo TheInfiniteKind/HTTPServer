@@ -9,23 +9,23 @@
 import Foundation
 
 
-extension NSDate {
+extension Date {
     /// Returns the date formatted according to RFC 2616 section 3.3.1
     /// specifically RFC 822, updated by RFC 1123
-    public func HTTPFormattedDateString(timeZone timeZone: NSTimeZone = NSTimeZone.systemTimeZone()) -> String {
-        let timeZoneString = timeZone.abbreviation ?? "GMT"
+    public func HTTPFormattedDateString(timeZone: TimeZone = TimeZone.current) -> String {
+        let timeZoneString = timeZone.abbreviation() ?? "GMT"
         var dateString: String? = nil
         timeZoneString.withCString { (timeZonePointer) -> () in
             var t = time_t(self.timeIntervalSince1970)
             var timeptr = tm()
             gmtime_r(&t, &timeptr)
-            timeptr.tm_zone = UnsafeMutablePointer<Int8>(timeZonePointer)
-            let locale = newlocale(0, "POSIX", locale_t())
-            var buffer = ContiguousArray<Int8>(count: 40, repeatedValue: 0)
+            timeptr.tm_zone = UnsafeMutablePointer<Int8>(mutating: timeZonePointer)
+            let locale = newlocale(0, "POSIX", nil)
+            var buffer = ContiguousArray<Int8>(repeating: 0, count: 40)
             let bufferSize = buffer.count
-            buffer.withUnsafeMutableBufferPointer { (inout b: UnsafeMutableBufferPointer<Int8>) -> () in
+            buffer.withUnsafeMutableBufferPointer { (b: inout UnsafeMutableBufferPointer<Int8>) -> () in
                 if 0 < strftime_l(b.baseAddress, bufferSize, "%a, %d %b %Y %H:%M:%S %Z", &timeptr, locale) {
-                    dateString = String.fromCString(UnsafePointer<CChar>(b.baseAddress))
+                    dateString = String(cString: UnsafePointer<CChar>(b.baseAddress!))
                 }
             }
             freelocale(locale)

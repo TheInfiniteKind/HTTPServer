@@ -13,7 +13,7 @@ import SocketHelpers
 
 public struct SocketAddress {
     /// Wraps a `sockaddr`, but could have more data than `sizeof(sockaddr)`
-    let addressData: NSData
+    let addressData: Data
 }
 
 
@@ -21,7 +21,7 @@ public struct SocketAddress {
 /// A socket that connects to a client, i.e. a program that connected to us.
 struct ClientSocket {
     let address: SocketAddress
-    private let backingSocket: CInt
+    fileprivate let backingSocket: CInt
     init(address: SocketAddress, backingSocket: CInt) {
         self.address = address
         self.backingSocket = backingSocket
@@ -31,12 +31,12 @@ struct ClientSocket {
 
 extension ClientSocket {
     /// Creates a dispatch I/O channel associated with the socket.
-    func createIOChannelWithQueue(queue: dispatch_queue_t) -> dispatch_io_t {
-        return dispatch_io_create(DISPATCH_IO_STREAM, backingSocket, queue) {
+    func createIOChannelWithQueue(_ queue: DispatchQueue) -> DispatchIO {
+        return DispatchIO(__type: DispatchIO.StreamType.stream.rawValue, fd: backingSocket, queue: queue) {
             error in
-            if let e = POSIXError(rawValue: CInt(error)) {
-                print("Error on socket: \(e)")
-            }
+            let nsError = NSError(domain: POSIXError.errorDomain, code: Int(error), userInfo: nil)
+            let e = POSIXError(_nsError: nsError)
+            print("Error on socket: \(e)")
         }
     }
 }
@@ -59,32 +59,33 @@ extension SocketAddress : CustomStringConvertible {
 }
 
 extension SocketAddress {
-    private var inFamily: sa_family_t {
-        let pointer = UnsafePointer<sockaddr_in>(addressData.bytes)
-        return pointer.memory.sin_family
+    fileprivate var inFamily: sa_family_t {
+        let pointer = (addressData as NSData).bytes.bindMemory(to: sockaddr_in.self, capacity: addressData.count)
+        return pointer.pointee.sin_family
     }
-    private var inAddrDescription: String? {
-        let pointer = UnsafePointer<sockaddr_in>(addressData.bytes)
+    fileprivate var inAddrDescription: String? {
+        let pointer = (addressData as NSData).bytes.bindMemory(to: sockaddr_in.self, capacity: addressData.count)
         switch inFamily {
         case sa_family_t(AF_INET6):
             fallthrough
         case sa_family_t(AF_INET):
             let data = NSMutableData(length: Int(INET6_ADDRSTRLEN))!
-            let inAddr = (UnsafePointer<UInt8>(pointer) + offsetOf__sin_addr__in__sockaddr_in())
-            if inet_ntop(AF_INET, inAddr, UnsafeMutablePointer<Int8>(data.mutableBytes), socklen_t(data.length)) != UnsafePointer<Int8>() {
-                return (NSString(data: data, encoding: NSUTF8StringEncoding)! as String)                }
+            let inAddr = (UnsafeRawPointer(pointer) + offsetOf__sin_addr__in__sockaddr_in())
+            let dst = data.mutableBytes.assumingMemoryBound(to: Int8.self)
+            if inet_ntop(AF_INET, inAddr, dst, socklen_t(data.length)) != nil {
+                return (NSString(data: data as Data, encoding: String.Encoding.utf8.rawValue)! as String)                }
             return nil
         default:
             return nil
         }
     }
-    private var inPortDescription: String? {
-        let pointer = UnsafePointer<sockaddr_in>(addressData.bytes)
+    fileprivate var inPortDescription: String? {
+        let pointer = (addressData as NSData).bytes.bindMemory(to: sockaddr_in.self, capacity: addressData.count)
         switch inFamily {
         case sa_family_t(AF_INET6):
             fallthrough
         case sa_family_t(AF_INET):
-            return "\(CFSwapInt16BigToHost(UInt16(pointer.memory.sin_port)))"
+            return "\(CFSwapInt16BigToHost(UInt16(pointer.pointee.sin_port)))"
         default:
             return nil
         }

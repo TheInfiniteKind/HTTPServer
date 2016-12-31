@@ -26,7 +26,7 @@ DEBUG_INFORMATION_FORMAT = dwarf-with-dsym
 
 // Code Signing
 //
-CODE_SIGN_IDENTITY[sdk=iphoneos*] = iPhone Developer
+CODE_SIGN_IDENTITY[sdk=iphoneos*] = ""
 
 
 // Deployment
@@ -99,5 +99,6 @@ GCC_PREPROCESSOR_DEFINITIONS = DEBUG=0 $(inherited)
 
 // Swift Compiler - Code Generation
 //
+SWIFT_VERSION = 3.0;
 
 
