@@ -16,15 +16,13 @@ public typealias RequestHandler = (_ request: HTTPRequest, _ clientAddress: Sock
 
 
 /// This handler can be passed to SocketServer.withAcceptHandler to create an HTTP server.
-public func httpConnectionHandler(_ channel: DispatchIO, clientAddress: SocketAddress, queue: DispatchQueue, handler: @escaping RequestHandler) -> () {
-    //dispatch_io_set_low_water(channel, 1);
+public func httpConnectionHandler(channel: DispatchIO, clientAddress: SocketAddress, queue: DispatchQueue, handler: @escaping RequestHandler) -> () {
+    channel.setLimit(lowWater: 1)
     // high water mark defaults to SIZE_MAX
     channel.setInterval(interval: .milliseconds(10), flags: .strictInterval)
 
-    var accumulated: DispatchData?
-    
+    var accumulated = DispatchData.empty
     var request = RequestInProgress.none
-    
     let OperationCancelledError = Int32(89)
     
     channel.read(offset: 0, length: Int.max, queue: queue) {
@@ -34,14 +32,8 @@ public func httpConnectionHandler(_ channel: DispatchIO, clientAddress: SocketAd
         }
         // Append the data and update the request:
         if let d = data {
-            if accumulated == nil {
-                accumulated = d
-            } else {
-                accumulated!.append(d)
-            }
-            let r = request.consumeData(accumulated!)
-            request = r.request
-            accumulated = r.remainder
+            accumulated.append(d)
+            (request, accumulated) = request.consume(accumulated)
         }
         switch request {
         case let .complete(completeRequest, _):
@@ -75,22 +67,6 @@ public func httpConnectionHandler(_ channel: DispatchIO, clientAddress: SocketAd
 //MARK:
 
 
-
-private func splitData(_ data: DispatchData, location: Int) -> (DispatchData, DispatchData) {
-    let head = data.subdata(in: 0 ..< location)
-    let tail = data.subdata(in: location ..< data.count)
-    return (head, tail)
-}
-
-private struct RequestInProgressAndRemainder {
-    let request: RequestInProgress
-    let remainder: DispatchData
-    init(_ r: RequestInProgress, _ d: DispatchData) {
-        request = r
-        remainder = d
-    }
-}
-
 private enum RequestInProgress {
     case none
     case error
@@ -98,45 +74,43 @@ private enum RequestInProgress {
     case incompleteMessage(CFHTTPMessage, Int)
     case complete(CFHTTPMessage, Int)
     
-    func consumeData(_ data: DispatchData) -> RequestInProgressAndRemainder {
+    static let headerEndData = Data(bytes: UnsafePointer<UInt8>("\r\n\r\n"), count: 4)
+    
+    func consume(_ data: DispatchData) -> (RequestInProgress, DispatchData) {
         switch self {
         case .error:
-            return RequestInProgressAndRemainder(.error, data)
-        case .none:
-            fallthrough
-        case .incompleteHeader:
+            return (.error, data)
+        case .none, .incompleteHeader:
             let d = data.withUnsafeBytes { bytes in
-                return Data(bytes: UnsafeRawPointer(bytes), count: data.count)
+                Data(bytesNoCopy: UnsafeMutableRawPointer(mutating: bytes), count: data.count, deallocator: .none)
             }
-//            let d = data as! Data
-            guard let r = d.range(of: Data(bytes: UnsafePointer<UInt8>("\r\n\r\n"), count: 4), options: [], in: Range(uncheckedBounds: (lower: 0, upper: d.count)))
-            else {
-                return RequestInProgressAndRemainder(.incompleteHeader, data)
+            let fullRange = Range(uncheckedBounds: (lower: 0, upper: d.count))
+            guard let headerEndRange = d.range(of: RequestInProgress.headerEndData, options: [], in: fullRange) else {
+                return (.incompleteHeader, data)
             }
-            let end = Int(r.lowerBound + 4)
-            let (header, tail) = splitData(data, location: end)
+            let end = Int(headerEndRange.lowerBound + 4)
+            let (header, body) = data.split(at: end)
             let message = CFHTTPMessageCreateEmpty(nil, true).takeRetainedValue()
-            message.appendDispatchData(header)
-            if !CFHTTPMessageIsHeaderComplete(message) {
-                return RequestInProgressAndRemainder(.error, data)
-            } else {
-                let bodyLength = message.messsageBodyLength()
-                if bodyLength <= tail.count {
-                    let (head, tail2) = splitData(tail, location: bodyLength)
-                    message.appendDispatchData(head) // CFHTTPMessageSetBody() ?
-                    return RequestInProgressAndRemainder(.complete(message, bodyLength), tail2)
-                }
-                return RequestInProgressAndRemainder(.incompleteMessage(message, bodyLength), tail)
+            message.append(header)
+            guard CFHTTPMessageIsHeaderComplete(message) else {
+                return (.error, data)
             }
-        case let .incompleteMessage(message, bodyLength):
-            if bodyLength <= data.count {
-                let (head, tail) = splitData(data, location: bodyLength)
-                message.appendDispatchData(head) // CFHTTPMessageSetBody() ?
-                return RequestInProgressAndRemainder(.complete(message, bodyLength), tail)
+            let contentLength = message.contentLength
+            if contentLength <= body.count {
+                let (content, remainder) = body.split(at: contentLength)
+                message.append(content) // CFHTTPMessageSetBody() ?
+                return (.complete(message, contentLength), remainder)
             }
-            return RequestInProgressAndRemainder(.incompleteMessage(message, bodyLength), data)
-        case let .complete(message, bodyLength):
-            return RequestInProgressAndRemainder(.complete(message, bodyLength), data)
+            return (.incompleteMessage(message, contentLength), body)
+        case let .incompleteMessage(message, contentLength):
+            if contentLength <= data.count {
+                let (content, remainder) = data.split(at: contentLength)
+                message.append(content) // CFHTTPMessageSetBody() ?
+                return (.complete(message, contentLength), remainder)
+            }
+            return (.incompleteMessage(message, contentLength), data)
+        case let .complete(message, contentLength):
+            return (.complete(message, contentLength), data)
         }
     }
 }

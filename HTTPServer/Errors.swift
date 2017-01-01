@@ -9,7 +9,6 @@
 import Foundation
 
 
-
 struct DarwinError: Error {
     let operation: String
     let backing: POSIXError
@@ -29,7 +28,6 @@ extension DarwinError {
     }
 }
 
-
 extension DarwinError : CustomStringConvertible {
     var description: String {
         let s = String(cString: strerror(errno))
@@ -38,25 +36,38 @@ extension DarwinError : CustomStringConvertible {
 }
 
 
-/// The 1st closure must return `true` is the result is an error.
-/// The 2nd closure is the operation to be performed.
-func attempt(_ name: String, file: String = #file, line: UInt = #line, valid: (CInt) -> Bool, _ b: @autoclosure () -> CInt) throws -> CInt {
-    let r = b()
-    guard valid(r) else {
-        throw DarwinError(operation: name, errno: r, file: file, line: line)
+
+struct DarwinCall {
+    enum Valid {
+        case isNotNegative1
+        case is0
     }
-    return r
+    
+    static func attempt(name: String, file: String = #file, line: UInt = #line, valid: Valid, call: @autoclosure () -> CInt) throws -> CInt {
+        return try attempt(name: name, file: file, line: line, valid: valid.predicate, call: call)
+    }
+
+    /// The 1st closure must return `true` is the result is an error.
+    /// The 2nd closure is the operation to be performed.
+    fileprivate static func attempt(name: String, file: String = #file, line: UInt = #line, valid: (CInt) -> Bool, call: @autoclosure () -> CInt) throws -> CInt {
+        let result = call()
+        guard valid(result) else {
+            throw DarwinError(operation: name, errno: result, file: file, line: line)
+        }
+        return result
+    }
 }
 
-func isNotNegative1(_ r: CInt) -> Bool {
-    return r != -1
-}
-func is0(_ r: CInt) -> Bool {
-    return r != -1
+extension DarwinCall.Valid {
+    fileprivate var predicate: (CInt) -> Bool {
+        switch self {
+        case .isNotNegative1: return { $0 != -1 }
+        case .is0: return { $0 == 0 }
+        }
+    }
 }
 
 
-///
 func ignoreAndLogErrors(_ b: () throws -> ()) {
     do {
         try b()

@@ -22,7 +22,7 @@ class HTTPServerTests: XCTestCase {
         let q = DispatchQueue.global()
         do {
             server = try SocketServer() { channel in
-                httpConnectionHandler(channel.channel, clientAddress: channel.address, queue: q) {
+                httpConnectionHandler(channel: channel.channel, clientAddress: channel.address, queue: q) {
                     (request, clientAddress, response) in
                     print("Request from \(clientAddress)")
                     var r = HTTPResponse(statusCode: 200, statusDescription: "Ok")

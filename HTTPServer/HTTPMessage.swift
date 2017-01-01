@@ -110,14 +110,16 @@ extension HTTPResponse {
 
 
 extension CFHTTPMessage {
-    func messsageBodyLength() -> Int {
+    var contentLength: Int {
         // https://tools.ietf.org/html/rfc2616 section 4.4 "Message Length"
-        let contentLenght = CFHTTPMessageCopyHeaderFieldValue(self, "Content-Length" as CFString)?.takeRetainedValue() as? NSString
-        let transferEncoding = CFHTTPMessageCopyHeaderFieldValue(self, "Transfer-Encoding" as CFString)?.takeRetainedValue() as? String
-        guard let l = contentLenght, transferEncoding != nil else { return 0 }
-        return Int(l.integerValue)
+        guard let contentLengthString = CFHTTPMessageCopyHeaderFieldValue(self, "Content-Length" as CFString)?.takeRetainedValue() as? String,
+            let contentLength = Int(contentLengthString),
+            let _ = CFHTTPMessageCopyHeaderFieldValue(self, "Transfer-Encoding" as CFString)?.takeRetainedValue() as? String
+            else { return 0 }
+        return contentLength
     }
-    func appendDispatchData(_ data: DispatchData) {
+    
+    func append(_ data: DispatchData) {
         data.enumerateBytes(block: { buffer, idx, stop in
             if let base = buffer.baseAddress {
                 CFHTTPMessageAppendBytes(self, base, CFIndex(buffer.count))
@@ -125,6 +127,7 @@ extension CFHTTPMessage {
             stop = false
         })
     }
+    
     func serialized() -> DispatchData {
         let data = CFHTTPMessageCopySerializedMessage(self)!.takeRetainedValue() as NSData
         let uint8Ptr = data.bytes.assumingMemoryBound(to: UInt8.self)

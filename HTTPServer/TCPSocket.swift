@@ -16,23 +16,25 @@ struct TCPSocket {
         case inet
         case inet6
     }
+    
     fileprivate let domain: Domain
     fileprivate let backingSocket: CInt
-    init(domain d: Domain) throws {
-        domain = d
-        backingSocket = try attempt("socket(2)",  valid: isNotNegative1, socket(d.rawValue, SOCK_STREAM, IPPROTO_TCP))
+    
+    init(domain: Domain) throws {
+        self.domain = domain
+        self.backingSocket = try DarwinCall.attempt(name: "socket(2)",  valid: .isNotNegative1, call: socket(domain.rawValue, SOCK_STREAM, IPPROTO_TCP))
     }
 }
 
 extension TCPSocket {
     /// Close the socket.
     func close() throws {
-        _ = try attempt("close(2)", valid: is0, Darwin.close(backingSocket))
+        _ = try DarwinCall.attempt(name: "close(2)", valid: .is0, call: Darwin.close(backingSocket))
     }
     /// Listen for connections.
     /// Start accepting incoming connections and set the queue limit for incoming connections.
     func listen(_ backlog: CInt = SOMAXCONN) throws {
-        _ = try attempt("listen(2)", valid: is0, Darwin.listen(backingSocket, backlog))
+        _ = try DarwinCall.attempt(name: "listen(2)", valid: .is0, call: Darwin.listen(backingSocket, backlog))
     }
 }
 
@@ -41,12 +43,13 @@ extension TCPSocket {
     /// Retruns the resulting client socket.
     func accept() throws -> ClientSocket {
         // The address has the type `sockaddr`, but could have more data than `sizeof(sockaddr)`. Hence we put it inside an NSData instance.
-        let addressData = NSMutableData(length: Int(SOCK_MAXADDRLEN))!
-        let p = UnsafeMutablePointer<sockaddr>(mutating: addressData.bytes.bindMemory(to: sockaddr.self, capacity: addressData.length))
+        var addressData = Data(capacity: Int(SOCK_MAXADDRLEN))
         var length = socklen_t(MemoryLayout<sockaddr_in>.size)
-        let socket = try attempt("accept(2)", valid: isNotNegative1, Darwin.accept(backingSocket, p, &length))
-        addressData.length = Int(length)
-        let address = SocketAddress(addressData: addressData as Data)
+        let socket: CInt = try addressData.withUnsafeMutableBytes { (bytes: UnsafeMutablePointer<sockaddr>) in
+            return try DarwinCall.attempt(name: "accept(2)", valid: .isNotNegative1, call: Darwin.accept(backingSocket, bytes, &length))
+        }
+        addressData.count = Int(length)
+        let address = SocketAddress(data: addressData)
         return ClientSocket(address: address, backingSocket: socket)
     }
 }
@@ -61,7 +64,7 @@ extension TCPSocket {
     /// Set the socket status flags.
     /// Uses `fnctl(2)` with `F_SETFL`.
     func setStatusFlags(_ flag: StatusFlag) throws {
-        _ = try attempt("fcntl(2)", valid: isNotNegative1, SocketHelper_fcntl_setFlags(backingSocket, flag.rawValue))
+        _ = try DarwinCall.attempt(name: "fcntl(2)", valid: .isNotNegative1, call: SocketHelper_fcntl_setFlags(backingSocket, flag.rawValue))
     }
     /// Get the socket status flags.
     /// Uses `fnctl(2)` with `F_GETFL`.
@@ -71,8 +74,8 @@ extension TCPSocket {
 }
 
 extension TCPSocket {
-    func createDispatchReadSourceWithQueue(_ queue: DispatchQueue) -> DispatchSource {
-        return DispatchSource.makeReadSource(fileDescriptor: backingSocket, queue: queue) /*Migrator FIXME: Use DispatchSourceRead to avoid the cast*/ as! DispatchSource
+    func createDispatchReadSource(with queue: DispatchQueue) -> DispatchSource {
+        return DispatchSource.makeReadSource(fileDescriptor: backingSocket, queue: queue) as! DispatchSource
     }
 }
 
@@ -114,7 +117,7 @@ extension TCPSocket {
     }
     func bindToPort(_ port: UInt16) throws {
         try withUnsafeAnySockAddrWithPort(port) { addr in
-            _ = try attempt("bind(2)", valid: is0, bind(backingSocket, addr, socklen_t(MemoryLayout<sockaddr>.size)))
+            _ = try DarwinCall.attempt(name: "bind(2)", valid: .is0, call: bind(backingSocket, addr, socklen_t(MemoryLayout<sockaddr>.size)))
         }
     }
 }

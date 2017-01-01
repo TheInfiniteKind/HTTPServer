@@ -13,7 +13,11 @@ import SocketHelpers
 
 public struct SocketAddress {
     /// Wraps a `sockaddr`, but could have more data than `sizeof(sockaddr)`
-    let addressData: Data
+    let data: Data
+    
+    init(data: Data) {
+        self.data = data
+    }
 }
 
 
@@ -31,12 +35,9 @@ struct ClientSocket {
 
 extension ClientSocket {
     /// Creates a dispatch I/O channel associated with the socket.
-    func createIOChannelWithQueue(_ queue: DispatchQueue) -> DispatchIO {
-        return DispatchIO(__type: DispatchIO.StreamType.stream.rawValue, fd: backingSocket, queue: queue) {
-            error in
-            let nsError = NSError(domain: POSIXError.errorDomain, code: Int(error), userInfo: nil)
-            let e = POSIXError(_nsError: nsError)
-            print("Error on socket: \(e)")
+    func createIOChannel(with queue: DispatchQueue) -> DispatchIO {
+        return DispatchIO(type: .stream, fileDescriptor: backingSocket, queue: queue) { error in
+            print("Error on socket: \(error)")
         }
     }
 }
@@ -60,11 +61,12 @@ extension SocketAddress : CustomStringConvertible {
 
 extension SocketAddress {
     fileprivate var inFamily: sa_family_t {
-        let pointer = (addressData as NSData).bytes.bindMemory(to: sockaddr_in.self, capacity: addressData.count)
+        let pointer = (data as NSData).bytes.bindMemory(to: sockaddr_in.self, capacity: data.count)
         return pointer.pointee.sin_family
     }
+    
     fileprivate var inAddrDescription: String? {
-        let pointer = (addressData as NSData).bytes.bindMemory(to: sockaddr_in.self, capacity: addressData.count)
+        let pointer = (data as NSData).bytes.bindMemory(to: sockaddr_in.self, capacity: data.count)
         switch inFamily {
         case sa_family_t(AF_INET6):
             fallthrough
@@ -79,8 +81,9 @@ extension SocketAddress {
             return nil
         }
     }
+    
     fileprivate var inPortDescription: String? {
-        let pointer = (addressData as NSData).bytes.bindMemory(to: sockaddr_in.self, capacity: addressData.count)
+        let pointer = (data as NSData).bytes.bindMemory(to: sockaddr_in.self, capacity: data.count)
         switch inFamily {
         case sa_family_t(AF_INET6):
             fallthrough

@@ -35,6 +35,15 @@ extension Date {
 }
 
 
+extension DispatchData {
+    func split(at location: Int) -> (DispatchData, DispatchData) {
+        let head = subdata(in: 0 ..< location)
+        let tail = subdata(in: location ..< count)
+        return (head, tail)
+    }
+}
+
+
 extension Int {
     
     public var defaultHTTPStatusDescription: String? {

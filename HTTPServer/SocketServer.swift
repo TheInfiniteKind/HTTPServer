@@ -10,12 +10,9 @@ import Foundation
 import SocketHelpers
 
 
-
 public enum SocketError : Error {
     case noPortAvailable
 }
-
-
 
 
 public final class SocketServer {
@@ -34,27 +31,27 @@ public final class SocketServer {
         try self.init(serverSocket: serverSocket, port: port, acceptHandler: acceptHandler)
     }
     
-    let serverSocket: TCPSocket
-    let acceptSource: DispatchSource
+    fileprivate let serverSocket: TCPSocket
+    fileprivate let acceptSource: DispatchSource
     
-    fileprivate init(serverSocket ss: TCPSocket, port p: UInt16, acceptHandler: @escaping (Channel) -> ()) throws {
-        serverSocket = ss
-        port = p
-        acceptSource = SocketServer.createDispatchSourceWithSocket(ss, port: p, acceptHandler: acceptHandler)
+    fileprivate init(serverSocket: TCPSocket, port: UInt16, acceptHandler: @escaping (Channel) -> ()) throws {
+        self.serverSocket = serverSocket
+        self.port = port
+        acceptSource = SocketServer.createDispatchSource(from: serverSocket, port: port, acceptHandler: acceptHandler)
         acceptSource.resume();
         try serverSocket.listen()
     }
     
-    fileprivate static func createDispatchSourceWithSocket(_ socket: TCPSocket, port: UInt16, acceptHandler: @escaping (Channel) -> ()) -> DispatchSource {
+    fileprivate static func createDispatchSource(from socket: TCPSocket, port: UInt16, acceptHandler: @escaping (Channel) -> ()) -> DispatchSource {
         let queueName = "server on port \(port)"
         let queue = DispatchQueue(label: queueName, attributes: DispatchQueue.Attributes.concurrent);
-        let source = socket.createDispatchReadSourceWithQueue(queue)
+        let source = socket.createDispatchReadSource(with: queue)
         
         source.setEventHandler {
             source.forEachPendingConnection {
                 do {
                     let clientSocket = try socket.accept()
-                    let io = clientSocket.createIOChannelWithQueue(queue)
+                    let io = clientSocket.createIOChannel(with: queue)
                     let channel = Channel(channel: io, address: clientSocket.address)
                     acceptHandler(channel)
                 } catch let e {
@@ -75,10 +72,10 @@ public final class SocketServer {
 
 
 private extension DispatchSource {
-    func forEachPendingConnection(_ b: () -> ()) {
+    func forEachPendingConnection(_ f: () -> ()) {
         let pendingConnectionCount: UInt = self.data
         for _ in 0..<pendingConnectionCount {
-            b()
+            f()
         }
     }
 }
