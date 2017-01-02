@@ -59,7 +59,7 @@ extension SocketAddress {
     fileprivate var inAddrDescription: String? {
         return data.withUnsafeBytes { (dataPtr: UnsafePointer<sockaddr_in>) in
             guard [sa_family_t(AF_INET6), sa_family_t(AF_INET)].contains(address.sin_family) else { return nil }
-            var descriptionData = Data(capacity: Int(INET6_ADDRSTRLEN))
+            var descriptionData = Data(count: Int(INET6_ADDRSTRLEN))
             let inAddr = UnsafeRawPointer(dataPtr) + offsetOf__sin_addr__in__sockaddr_in()
             let result = descriptionData.withUnsafeMutableBytes { (descriptionPtr: UnsafeMutablePointer<Int8>) in
                 inet_ntop(AF_INET, inAddr, descriptionPtr, socklen_t(descriptionData.count))
