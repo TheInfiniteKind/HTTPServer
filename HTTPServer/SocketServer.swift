@@ -16,7 +16,7 @@ public enum SocketError : Error {
 
 
 public final class SocketServer {
-    public struct Channel {
+    public struct Client {
         public let channel: DispatchIO
         public let address: sockaddr_in
     }
@@ -24,7 +24,7 @@ public final class SocketServer {
     public let port: UInt16
     
     /// The accept handler will be called with a suspended dispatch I/O channel and the client's SocketAddress.
-    public convenience init(acceptHandler: @escaping (Channel) -> ()) throws {
+    public convenience init(acceptHandler: @escaping (Client) -> ()) throws {
         let serverSocket = try TCPSocket(domain: .inet)
         let port = try serverSocket.bindToAnyPort()
         try serverSocket.setStatusFlags(.O_NONBLOCK)
@@ -34,7 +34,7 @@ public final class SocketServer {
     fileprivate let serverSocket: TCPSocket
     fileprivate let acceptSource: DispatchSource
     
-    fileprivate init(serverSocket: TCPSocket, port: UInt16, acceptHandler: @escaping (Channel) -> ()) throws {
+    fileprivate init(serverSocket: TCPSocket, port: UInt16, acceptHandler: @escaping (Client) -> ()) throws {
         self.serverSocket = serverSocket
         self.port = port
         acceptSource = SocketServer.createDispatchSource(from: serverSocket, port: port, acceptHandler: acceptHandler)
@@ -42,7 +42,7 @@ public final class SocketServer {
         try serverSocket.listen()
     }
     
-    fileprivate static func createDispatchSource(from socket: TCPSocket, port: UInt16, acceptHandler: @escaping (Channel) -> ()) -> DispatchSource {
+    fileprivate static func createDispatchSource(from socket: TCPSocket, port: UInt16, acceptHandler: @escaping (Client) -> ()) -> DispatchSource {
         let queueName = "server on port \(port)"
         let queue = DispatchQueue(label: queueName, attributes: DispatchQueue.Attributes.concurrent);
         let source = socket.createDispatchReadSource(with: queue)
@@ -52,7 +52,7 @@ public final class SocketServer {
                 do {
                     let clientSocket = try socket.accept()
                     let io = clientSocket.createIOChannel(with: queue)
-                    let channel = Channel(channel: io, address: clientSocket.address)
+                    let channel = Client(channel: io, address: clientSocket.address)
                     acceptHandler(channel)
                 } catch let e {
                     print("Failed to accept incoming connection: \(e)")

@@ -17,8 +17,8 @@ public final class HTTPServer {
     public typealias RequestHandler = (_ request: HTTPRequest, _ clientAddress: sockaddr_in, _ responseHandler: (HTTPResponse?) -> ()) -> ()
 
     public init(queue: DispatchQueue, handler: @escaping RequestHandler) throws {
-        socketServer = try SocketServer() { channel in
-            httpConnectionHandler(channel: channel.channel, clientAddress: channel.address, queue: queue, handler: handler)
+        socketServer = try SocketServer() { client in
+            httpConnectionHandler(client: client, queue: queue, handler: handler)
         }
     }
     
@@ -28,7 +28,8 @@ public final class HTTPServer {
 }
 
 
-private func httpConnectionHandler(channel: DispatchIO, clientAddress: sockaddr_in, queue: DispatchQueue, handler: @escaping HTTPServer.RequestHandler) -> () {
+private func httpConnectionHandler(client: SocketServer.Client, queue: DispatchQueue, handler: @escaping HTTPServer.RequestHandler) -> () {
+    let channel = client.channel
     channel.setLimit(lowWater: 1)
     // high water mark defaults to SIZE_MAX
     channel.setInterval(interval: .milliseconds(10), flags: .strictInterval)
@@ -49,7 +50,7 @@ private func httpConnectionHandler(channel: DispatchIO, clientAddress: sockaddr_
         }
         switch request {
         case let .complete(completeRequest, _):
-            handler(HTTPRequest(message: completeRequest), clientAddress, { (maybeResponse) -> () in
+            handler(HTTPRequest(message: completeRequest), client.address, { (maybeResponse) -> () in
                 if let response = maybeResponse {
                     channel.write(offset: 0, data: response.serializedData, queue: queue) {
                         (done, data, error) in
