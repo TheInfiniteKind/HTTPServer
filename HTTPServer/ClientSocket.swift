@@ -31,13 +31,17 @@ final class ClientSocket {
 public struct SocketAddress {
     /// Wraps a `sockaddr`, but could have more data than `sizeof(sockaddr)`
     let data: Data
+    
+    var address: sockaddr_in {
+        return data.withUnsafeBytes { (bytes: UnsafePointer<sockaddr_in>) in bytes.pointee }
+    }
 }
 
 
 extension SocketAddress : CustomStringConvertible {
     public var description: String {
         if let addr = inAddrDescription, let port = inPortDescription {
-            switch inFamily {
+            switch address.sin_family {
             case sa_family_t(AF_INET6):
                 return "[" + addr + "]:" + port
             case sa_family_t(AF_INET):
@@ -52,17 +56,11 @@ extension SocketAddress : CustomStringConvertible {
 
 
 extension SocketAddress {
-    fileprivate var inFamily: sa_family_t {
-        return data.withUnsafeBytes { (bytes: UnsafePointer<sockaddr_in>) in
-            bytes.pointee.sin_family
-        }
-    }
-    
     fileprivate var inAddrDescription: String? {
         return data.withUnsafeBytes { (dataPtr: UnsafePointer<sockaddr_in>) in
-            guard [sa_family_t(AF_INET6), sa_family_t(AF_INET)].contains(inFamily) else { return nil }
+            guard [sa_family_t(AF_INET6), sa_family_t(AF_INET)].contains(address.sin_family) else { return nil }
             var descriptionData = Data(capacity: Int(INET6_ADDRSTRLEN))
-            let inAddr = dataPtr + offsetOf__sin_addr__in__sockaddr_in()
+            let inAddr = UnsafeRawPointer(dataPtr) + offsetOf__sin_addr__in__sockaddr_in()
             let result = descriptionData.withUnsafeMutableBytes { (descriptionPtr: UnsafeMutablePointer<Int8>) in
                 inet_ntop(AF_INET, inAddr, descriptionPtr, socklen_t(descriptionData.count))
             }
@@ -72,11 +70,9 @@ extension SocketAddress {
     }
     
     fileprivate var inPortDescription: String? {
-        switch inFamily {
+        switch address.sin_family {
         case sa_family_t(AF_INET6), sa_family_t(AF_INET):
-            return data.withUnsafeBytes { (dataPtr: UnsafePointer<sockaddr_in>) in
-                "\(CFSwapInt16BigToHost(UInt16(dataPtr.pointee.sin_port)))"
-            }
+            return "\(CFSwapInt16BigToHost(UInt16(address.sin_port)))"
         default:
             return nil
         }
