@@ -6,7 +6,6 @@
 //  Copyright (c) 2015 objc.io. All rights reserved.
 //
 
-import UIKit
 import XCTest
 import HTTPServer
 
