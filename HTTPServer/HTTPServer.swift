@@ -11,12 +11,24 @@ import SocketHelpers
 
 
 
-public typealias RequestHandler = (_ request: HTTPRequest, _ clientAddress: SocketAddress, _ responseHandler:(HTTPResponse?) -> ()) -> ()
+public final class HTTPServer {
+    fileprivate let socketServer: SocketServer
+
+    public typealias RequestHandler = (_ request: HTTPRequest, _ clientAddress: SocketAddress, _ responseHandler: (HTTPResponse?) -> ()) -> ()
+
+    public init(queue: DispatchQueue, handler: @escaping RequestHandler) throws {
+        socketServer = try SocketServer() { channel in
+            httpConnectionHandler(channel: channel.channel, clientAddress: channel.address, queue: queue, handler: handler)
+        }
+    }
+    
+    public var port: UInt16 {
+        return socketServer.port
+    }
+}
 
 
-
-/// This handler can be passed to SocketServer.withAcceptHandler to create an HTTP server.
-public func httpConnectionHandler(channel: DispatchIO, clientAddress: SocketAddress, queue: DispatchQueue, handler: @escaping RequestHandler) -> () {
+private func httpConnectionHandler(channel: DispatchIO, clientAddress: SocketAddress, queue: DispatchQueue, handler: @escaping HTTPServer.RequestHandler) -> () {
     channel.setLimit(lowWater: 1)
     // high water mark defaults to SIZE_MAX
     channel.setInterval(interval: .milliseconds(10), flags: .strictInterval)
@@ -59,12 +71,6 @@ public func httpConnectionHandler(channel: DispatchIO, clientAddress: SocketAddr
         }
     }
 }
-
-
-
-//MARK:
-//MARK: Private
-//MARK:
 
 
 private enum RequestInProgress {

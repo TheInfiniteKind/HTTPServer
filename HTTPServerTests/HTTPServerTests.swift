@@ -12,7 +12,7 @@ import HTTPServer
 
 class HTTPServerTests: XCTestCase {
     
-    var server: SocketServer?
+    var server: HTTPServer?
     var port: UInt16?
     
     override func setUp() {
@@ -20,17 +20,13 @@ class HTTPServerTests: XCTestCase {
         
         let q = DispatchQueue.global()
         do {
-            server = try SocketServer() { channel in
-                httpConnectionHandler(channel: channel.channel, clientAddress: channel.address, queue: q) {
-                    (request, clientAddress, response) in
-                    print("Request from \(clientAddress)")
-                    var r = HTTPResponse(statusCode: 200, statusDescription: "Ok")
-                    r.bodyData = "hey".data(using: String.Encoding.utf8, allowLossyConversion: true)!
-                    r.setHeaderField("Content-Length", value: "\(r.bodyData.count)")
-                    r.setHeaderField("Foo", value: "Bar")
-                    response(r)
-                }
-                print("New connection")
+            server = try HTTPServer(queue: q) { request, clientAddress, response in
+                print("Request from \(clientAddress)")
+                var r = HTTPResponse(statusCode: 200, statusDescription: "Ok")
+                r.bodyData = "hey".data(using: String.Encoding.utf8, allowLossyConversion: true)!
+                r.setHeaderField("Content-Length", value: "\(r.bodyData.count)")
+                r.setHeaderField("Foo", value: "Bar")
+                response(r)
             }
         } catch let e {
             XCTFail("Unable to create HTTP server: \(e)")
