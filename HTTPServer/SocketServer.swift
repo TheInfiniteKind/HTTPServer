@@ -85,7 +85,7 @@ private extension TCPSocket {
     func bindToAnyPort() throws -> UInt16 {
         for port in UInt16(8000 + arc4random_uniform(1000))...10000 {
             do {
-                try bindToPort(port)
+                try bind(to: port)
                 return port
             } catch let e as DarwinCall.Error where e.backing == POSIXError(.EADDRINUSE) {
                 continue
