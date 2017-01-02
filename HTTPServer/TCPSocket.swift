@@ -22,19 +22,19 @@ struct TCPSocket {
     
     init(domain: Domain) throws {
         self.domain = domain
-        self.backingSocket = try DarwinCall.attempt(name: "socket(2)",  valid: .isNotNegative1, call: socket(domain.rawValue, SOCK_STREAM, IPPROTO_TCP))
+        self.backingSocket = try DarwinCall.attempt(name: "socket(2)",  valid: .notMinusOne, call: socket(domain.rawValue, SOCK_STREAM, IPPROTO_TCP))
     }
 }
 
 extension TCPSocket {
     /// Close the socket.
     func close() throws {
-        _ = try DarwinCall.attempt(name: "close(2)", valid: .is0, call: Darwin.close(backingSocket))
+        _ = try DarwinCall.attempt(name: "close(2)", valid: .zero, call: Darwin.close(backingSocket))
     }
     /// Listen for connections.
     /// Start accepting incoming connections and set the queue limit for incoming connections.
     func listen(_ backlog: CInt = SOMAXCONN) throws {
-        _ = try DarwinCall.attempt(name: "listen(2)", valid: .is0, call: Darwin.listen(backingSocket, backlog))
+        _ = try DarwinCall.attempt(name: "listen(2)", valid: .zero, call: Darwin.listen(backingSocket, backlog))
     }
 }
 
@@ -46,7 +46,7 @@ extension TCPSocket {
         var addressData = Data(capacity: Int(SOCK_MAXADDRLEN))
         var length = socklen_t(MemoryLayout<sockaddr_in>.size)
         let socket: CInt = try addressData.withUnsafeMutableBytes { (bytes: UnsafeMutablePointer<sockaddr>) in
-            return try DarwinCall.attempt(name: "accept(2)", valid: .isNotNegative1, call: Darwin.accept(backingSocket, bytes, &length))
+            return try DarwinCall.attempt(name: "accept(2)", valid: .notMinusOne, call: Darwin.accept(backingSocket, bytes, &length))
         }
         addressData.count = Int(length)
         let address = SocketAddress(data: addressData)
@@ -64,7 +64,7 @@ extension TCPSocket {
     /// Set the socket status flags.
     /// Uses `fnctl(2)` with `F_SETFL`.
     func setStatusFlags(_ flag: StatusFlag) throws {
-        _ = try DarwinCall.attempt(name: "fcntl(2)", valid: .isNotNegative1, call: SocketHelper_fcntl_setFlags(backingSocket, flag.rawValue))
+        _ = try DarwinCall.attempt(name: "fcntl(2)", valid: .notMinusOne, call: SocketHelper_fcntl_setFlags(backingSocket, flag.rawValue))
     }
     /// Get the socket status flags.
     /// Uses `fnctl(2)` with `F_GETFL`.
@@ -115,9 +115,10 @@ extension TCPSocket {
             try block(sockaddrPtr)
         }
     }
+    
     func bindToPort(_ port: UInt16) throws {
         try withUnsafeAnySockAddrWithPort(port) { addr in
-            _ = try DarwinCall.attempt(name: "bind(2)", valid: .is0, call: bind(backingSocket, addr, socklen_t(MemoryLayout<sockaddr>.size)))
+            _ = try DarwinCall.attempt(name: "bind(2)", valid: .zero, call: bind(backingSocket, addr, socklen_t(MemoryLayout<sockaddr>.size)))
         }
     }
 }

@@ -87,7 +87,7 @@ private extension TCPSocket {
             do {
                 try bindToPort(port)
                 return port
-            } catch let e as DarwinError where e.backing == POSIXError(.EADDRINUSE) {
+            } catch let e as DarwinCall.Error where e.backing == POSIXError(.EADDRINUSE) {
                 continue
             }
         }
