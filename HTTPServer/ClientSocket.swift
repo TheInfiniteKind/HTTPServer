@@ -21,7 +21,9 @@ final class ClientSocket {
 
     func createIOChannel(with queue: DispatchQueue) -> DispatchIO {
         return DispatchIO(type: .stream, fileDescriptor: backingSocket, queue: queue) { error in
-            print("Error on socket: \(error)")
+            if error != 0 {
+                print("Error on socket: \(error)")
+            }
         }
     }
 }
