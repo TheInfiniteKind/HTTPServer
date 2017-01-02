@@ -104,7 +104,10 @@ extension TCPSocket {
         let portN = in_port_t(CFSwapInt16HostToBig(port))
         let addr = UnsafeMutablePointer<sockaddr_in>.allocate(capacity: 1)
         addr.initialize(to: sockaddr_in(sin_len: 0, sin_family: domain.addressFamily, sin_port: portN, sin_addr: INADDR_ANY, sin_zero: (0, 0, 0, 0, 0, 0, 0, 0)))
-        defer { addr.deinitialize() }
+        defer {
+            addr.deinitialize()
+            addr.deallocate(capacity: 1)
+        }
         let sockaddr_inPtr = UnsafePointer(addr)
         try sockaddr_inPtr.withMemoryRebound(to: sockaddr.self, capacity: 1) { sockaddrPtr in
             try block(sockaddrPtr)
