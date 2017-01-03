@@ -19,8 +19,9 @@ func ignoreAndLogErrors(_ f: () throws -> ()) {
 
 
 extension sockaddr_in {
-    mutating func withUnsafeAnySockAddr<Result>(_ body: (UnsafePointer<sockaddr>) throws -> Result) rethrows -> Result {
-        return try withUnsafePointer(to: &self) {
+    func withUnsafeAnySockAddr<Result>(_ body: (UnsafePointer<sockaddr>) throws -> Result) rethrows -> Result {
+        var addr = self
+        return try withUnsafePointer(to: &addr) {
             return try $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { ptr in
                 return try body(ptr)
             }
@@ -28,8 +29,10 @@ extension sockaddr_in {
     }
 
     mutating func withUnsafeMutableAnySockAddr<Result>(_ body: (UnsafeMutablePointer<sockaddr>) throws -> Result) rethrows -> Result {
-        return try withUnsafeAnySockAddr {
-            return try body(UnsafeMutablePointer(mutating: $0))
+        return try withUnsafeMutablePointer(to: &self) {
+            return try $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { ptr in
+                return try body(ptr)
+            }
         }
     }
 }

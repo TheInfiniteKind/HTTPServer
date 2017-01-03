@@ -99,7 +99,7 @@ private let INADDR_ANY = in_addr(s_addr: in_addr_t(0))
 extension TCPSocket {
     fileprivate func withUnsafeAnySockAddr(port: UInt16, block: (UnsafePointer<sockaddr>) throws -> ()) rethrows {
         let portN = in_port_t(CFSwapInt16HostToBig(port))
-        var address = sockaddr_in(sin_len: 0, sin_family: domain.addressFamily, sin_port: portN, sin_addr: INADDR_ANY, sin_zero: (0, 0, 0, 0, 0, 0, 0, 0))
+        let address = sockaddr_in(sin_len: 0, sin_family: domain.addressFamily, sin_port: portN, sin_addr: INADDR_ANY, sin_zero: (0, 0, 0, 0, 0, 0, 0, 0))
         try address.withUnsafeAnySockAddr { try block($0) }
     }
 }
