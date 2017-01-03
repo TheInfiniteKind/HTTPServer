@@ -18,6 +18,23 @@ func ignoreAndLogErrors(_ f: () throws -> ()) {
 }
 
 
+extension sockaddr_in {
+    mutating func withUnsafeAnySockAddr<Result>(_ body: (UnsafePointer<sockaddr>) throws -> Result) rethrows -> Result {
+        return try withUnsafePointer(to: &self) {
+            return try $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { ptr in
+                return try body(ptr)
+            }
+        }
+    }
+
+    mutating func withUnsafeMutableAnySockAddr<Result>(_ body: (UnsafeMutablePointer<sockaddr>) throws -> Result) rethrows -> Result {
+        return try withUnsafeAnySockAddr {
+            return try body(UnsafeMutablePointer(mutating: $0))
+        }
+    }
+}
+
+
 extension Date {
     /// Returns the date formatted according to RFC 2616 section 3.3.1
     /// specifically RFC 822, updated by RFC 1123

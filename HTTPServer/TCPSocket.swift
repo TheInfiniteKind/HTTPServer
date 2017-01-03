@@ -36,14 +36,11 @@ extension TCPSocket {
     }
 
     func accept() throws -> ClientSocket {
-        // The address has the type `sockaddr`, but could have more data than `sizeof(sockaddr)`. Hence we put it inside a Data.
-        var addressData = Data(count: Int(SOCK_MAXADDRLEN))
+        var address = sockaddr_in()
         var length = socklen_t(MemoryLayout<sockaddr_in>.size)
-        let socket: CInt = try addressData.withUnsafeMutableBytes { (bytes: UnsafeMutablePointer<sockaddr>) in
-            return try DarwinCall.attempt(name: "accept(2)", valid: .notMinusOne, call: Darwin.accept(backingSocket, bytes, &length))
+        let socket = try address.withUnsafeMutableAnySockAddr { addressPtr in
+            return try DarwinCall.attempt(name: "accept(2)", valid: .notMinusOne, call: Darwin.accept(backingSocket, addressPtr, &length))
         }
-        addressData.count = Int(length)
-        let address = addressData.withUnsafeBytes { (addressPtr: UnsafePointer<sockaddr_in>) in addressPtr.pointee }
         return ClientSocket(address: address, backingSocket: socket)
     }
 
@@ -102,15 +99,9 @@ private let INADDR_ANY = in_addr(s_addr: in_addr_t(0))
 extension TCPSocket {
     fileprivate func withUnsafeAnySockAddr(port: UInt16, block: (UnsafePointer<sockaddr>) throws -> ()) rethrows {
         let portN = in_port_t(CFSwapInt16HostToBig(port))
-        let addr = UnsafeMutablePointer<sockaddr_in>.allocate(capacity: 1)
-        addr.initialize(to: sockaddr_in(sin_len: 0, sin_family: domain.addressFamily, sin_port: portN, sin_addr: INADDR_ANY, sin_zero: (0, 0, 0, 0, 0, 0, 0, 0)))
-        defer {
-            addr.deinitialize()
-            addr.deallocate(capacity: 1)
-        }
-        let sockaddr_inPtr = UnsafePointer(addr)
-        try sockaddr_inPtr.withMemoryRebound(to: sockaddr.self, capacity: 1) { sockaddrPtr in
-            try block(sockaddrPtr)
-        }
+        var address = sockaddr_in(sin_len: 0, sin_family: domain.addressFamily, sin_port: portN, sin_addr: INADDR_ANY, sin_zero: (0, 0, 0, 0, 0, 0, 0, 0))
+        try address.withUnsafeAnySockAddr { try block($0) }
     }
 }
+
+
