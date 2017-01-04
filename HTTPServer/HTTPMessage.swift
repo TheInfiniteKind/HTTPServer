@@ -131,10 +131,7 @@ extension CFHTTPMessage {
     func serialized() -> DispatchData {
         let data = CFHTTPMessageCopySerializedMessage(self)!.takeRetainedValue() as NSData
         let uint8Ptr = data.bytes.assumingMemoryBound(to: UInt8.self)
-        let gcdData = DispatchData(bytesNoCopy: UnsafeBufferPointer(start: uint8Ptr, count: data.length), deallocator: .custom(DispatchQueue.global(), {
-            _ = Unmanaged.passUnretained(data)
-            return
-        }))
+        let gcdData = DispatchData(bytesNoCopy: UnsafeBufferPointer(start: uint8Ptr, count: data.length), deallocator: .custom(DispatchQueue.global(), { _ = data }))
         return gcdData
     }
 }
