@@ -14,7 +14,7 @@ import SocketHelpers
 public final class HTTPServer {
     fileprivate let socketServer: SocketServer
 
-    public typealias RequestHandler = (_ request: HTTPRequest, _ clientAddress: sockaddr_in, _ responseHandler: (HTTPResponse?) -> ()) -> ()
+    public typealias RequestHandler = (_ request: HTTPRequest, _ clientAddress: SocketAddress, _ responseHandler: (HTTPResponse?) -> ()) -> ()
 
     public init(queue: DispatchQueue, handler: @escaping RequestHandler) throws {
         socketServer = try SocketServer() { client in

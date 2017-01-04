@@ -18,7 +18,7 @@ public enum SocketError : Error {
 public final class SocketServer {
     public struct Client {
         public let channel: DispatchIO
-        public let address: sockaddr_in
+        public let address: SocketAddress
     }
     
     public let port: UInt16

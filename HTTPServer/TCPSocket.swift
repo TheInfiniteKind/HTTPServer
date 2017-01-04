@@ -36,11 +36,14 @@ extension TCPSocket {
     }
 
     func accept() throws -> ClientSocket {
-        var address = sockaddr_in()
+        // The address has the type `sockaddr`, but could have more data than `sizeof(sockaddr)`. Hence we put it inside a Data instance.
+        var addressData = Data(count: Int(SOCK_MAXADDRLEN))
         var length = socklen_t(MemoryLayout<sockaddr_in>.size)
-        let socket = try address.withUnsafeMutableAnySockAddr { addressPtr in
-            return try DarwinCall.attempt(name: "accept(2)", valid: .notMinusOne, call: Darwin.accept(backingSocket, addressPtr, &length))
+        let socket = try addressData.withUnsafeMutableBytes { (dataPtr: UnsafeMutablePointer<sockaddr>) in
+            return try DarwinCall.attempt(name: "accept(2)", valid: .notMinusOne, call: Darwin.accept(backingSocket, dataPtr, &length))
         }
+        addressData.count = Int(length)
+        let address = SocketAddress(data: addressData)
         return ClientSocket(address: address, backingSocket: socket)
     }
 

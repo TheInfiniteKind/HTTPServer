@@ -10,11 +10,12 @@ import Foundation
 import SocketHelpers
 
 
+/// A socket that connects to a client, i.e. a program that connected to us.
 final class ClientSocket {
-    let address: sockaddr_in
+    let address: SocketAddress
     fileprivate let backingSocket: CInt
     
-    init(address: sockaddr_in, backingSocket: CInt) {
+    init(address: SocketAddress, backingSocket: CInt) {
         self.address = address
         self.backingSocket = backingSocket
     }
@@ -29,10 +30,20 @@ final class ClientSocket {
 }
 
 
-extension sockaddr_in: CustomStringConvertible {
+public struct SocketAddress {
+    /// Wraps a `sockaddr`, but could have more data than `sizeof(sockaddr)`
+    let data: Data
+    
+    var address: sockaddr_in {
+        return data.withUnsafeBytes { (bytes: UnsafePointer<sockaddr_in>) in bytes.pointee }
+    }
+}
+
+
+extension SocketAddress : CustomStringConvertible {
     public var description: String {
         if let addr = inAddrDescription, let port = inPortDescription {
-            switch sin_family {
+            switch address.sin_family {
             case sa_family_t(AF_INET6):
                 return "[" + addr + "]:" + port
             case sa_family_t(AF_INET):
@@ -43,24 +54,29 @@ extension sockaddr_in: CustomStringConvertible {
         }
         return "<unknown>"
     }
+}
 
+
+extension SocketAddress {
     fileprivate var inAddrDescription: String? {
-        guard [sa_family_t(AF_INET6), sa_family_t(AF_INET)].contains(sin_family) else { return nil }
-        var descriptionData = Data(count: Int(INET6_ADDRSTRLEN))
-        let result = descriptionData.withUnsafeMutableBytes { (descriptionPtr: UnsafeMutablePointer<Int8>) -> UnsafePointer<Int8>? in
-            var addr = sin_addr
-            return withUnsafePointer(to: &addr) { (addrPtr: UnsafePointer<in_addr>) in
-                return inet_ntop(AF_INET, addrPtr, descriptionPtr, socklen_t(descriptionData.count))
+        return data.withUnsafeBytes { (dataPtr: UnsafePointer<sockaddr_in>) in
+            guard [sa_family_t(AF_INET6), sa_family_t(AF_INET)].contains(address.sin_family) else { return nil }
+            var descriptionData = Data(count: Int(INET6_ADDRSTRLEN))
+            var inAddr = address.sin_addr
+            let result = withUnsafePointer(to: &inAddr) { (addrPtr: UnsafePointer<in_addr>) in
+                return descriptionData.withUnsafeMutableBytes { (descriptionPtr: UnsafeMutablePointer<Int8>) in
+                    inet_ntop(AF_INET, addrPtr, descriptionPtr, socklen_t(descriptionData.count))
+                }
             }
+            guard result != nil else { return nil }
+            return String(data: descriptionData, encoding: .utf8)
         }
-        guard result != nil else { return nil }
-        return String(data: descriptionData, encoding: .utf8)
     }
     
     fileprivate var inPortDescription: String? {
-        switch sin_family {
+        switch address.sin_family {
         case sa_family_t(AF_INET6), sa_family_t(AF_INET):
-            return "\(CFSwapInt16BigToHost(UInt16(sin_port)))"
+            return "\(CFSwapInt16BigToHost(UInt16(address.sin_port)))"
         default:
             return nil
         }
